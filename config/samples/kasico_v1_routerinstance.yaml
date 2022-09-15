@@ -1,0 +1,6 @@
+apiVersion: kasico.world-direct.at/v1
+kind: RouterInstance
+metadata:
+  name: routerinstance-sample
+spec:
+  # TODO(user): Add fields here

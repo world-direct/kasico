@@ -6,4 +6,14 @@ plugins:
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: kasico
 repo: github.com/world-direct/kasico
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: world-direct.at
+  group: kasico
+  kind: RouterInstance
+  path: github.com/world-direct/kasico/api/v1
+  version: v1
 version: "3"
