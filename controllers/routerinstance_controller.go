@@ -141,6 +141,7 @@ func (r *RouterInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&kasicov1.RouterInstance{}).
 		Owns(&appsv1.DaemonSet{}).
 		Owns(&corev1.Service{}).
+		Owns(&corev1.ConfigMap{}).
 		Complete(r)
 }
 
