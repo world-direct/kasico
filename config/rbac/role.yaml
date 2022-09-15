@@ -1,0 +1,33 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - kasico.world-direct.at
+  resources:
+  - routerinstances
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kasico.world-direct.at
+  resources:
+  - routerinstances/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kasico.world-direct.at
+  resources:
+  - routerinstances/status
+  verbs:
+  - get
+  - patch
+  - update

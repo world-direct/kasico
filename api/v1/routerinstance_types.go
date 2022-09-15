@@ -28,8 +28,18 @@ type RouterInstanceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of RouterInstance. Edit routerinstance_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// IngressClassName is the name of the ingressClass managed by this RouterInstance.
+	IngressClassName string `json:"ingressClassName,omitempty"`
+
+	// RouterService defines configuration values for the generated service
+	RouterService RouterServiceSpec `json:"routerService,omitempty"`
+}
+
+// RouterServiceSpec defines configuration values for the generated service
+type RouterServiceSpec struct {
+
+	// Annotations allows the user to add annoations to the router service
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 // RouterInstanceStatus defines the observed state of RouterInstance
