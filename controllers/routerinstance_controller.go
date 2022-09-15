@@ -170,7 +170,9 @@ func (r *RouterInstanceReconciler) serviceForRouterInstance(m *kasicov1.RouterIn
 			Namespace: m.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: ls,
+			ExternalTrafficPolicy: "Local",
+			Type:                  "LoadBalancer",
+			Selector:              ls,
 			Ports: []corev1.ServicePort{{
 				Port: 5060,
 				Name: "sip",
