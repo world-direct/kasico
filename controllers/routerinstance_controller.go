@@ -57,6 +57,7 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// based on https://github.com/operator-framework/operator-sdk/blob/latest/testdata/go/v3/memcached-operator/controllers/memcached_controller.go
 
 	log := ctrllog.FromContext(ctx)
+	log.Info("Reconcile RouterInstance")
 
 	// Fetch the RouterInstance instance
 	routerInstance := &kasicov1.RouterInstance{}
@@ -76,7 +77,7 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Check if the DaemonSet already exists, if not create a new one
 	daemonSet := &appsv1.DaemonSet{}
-	err = r.Get(ctx, types.NamespacedName{Name: routerInstance.Name, Namespace: routerInstance.Namespace}, daemonSet)
+	err = r.Get(ctx, types.NamespacedName{Name: Name_Daemonset, Namespace: routerInstance.Namespace}, daemonSet)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new daemonSet
 		daemonSet := r.daemonSetForRouterInstance(routerInstance)
@@ -95,7 +96,7 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Check if the Service already exists, if not create a new one
 	service := &corev1.Service{}
-	err = r.Get(ctx, types.NamespacedName{Name: routerInstance.Name, Namespace: routerInstance.Namespace}, service)
+	err = r.Get(ctx, types.NamespacedName{Name: Name_Service, Namespace: routerInstance.Namespace}, service)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new service
 		service := r.serviceForRouterInstance(routerInstance)
@@ -112,6 +113,25 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	// Check if the ConfigMap already exists, if not create a new one
+	cm := &corev1.ConfigMap{}
+	err = r.Get(ctx, types.NamespacedName{Name: Name_ConfigMap, Namespace: routerInstance.Namespace}, cm)
+	if err != nil && errors.IsNotFound(err) {
+		// Define a new ConfigMap
+		cm := r.configMapForRouterInstance(routerInstance)
+		log.Info("Creating a new ConfigMap", "ConfigMap.Namespace", cm.Namespace, "ConfigMap.Name", cm.Name)
+		err = r.Create(ctx, cm)
+		if err != nil {
+			log.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", cm.Namespace, "ConfigMap.Name", cm.Name)
+			return ctrl.Result{}, err
+		}
+		// ConfigMap created successfully - return and requeue
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get ConfigMap")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -124,13 +144,27 @@ func (r *RouterInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// configMapForRouterInstance returns the router-rules secret for the instance
+func (r *RouterInstanceReconciler) configMapForRouterInstance(m *kasicov1.RouterInstance) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      Name_ConfigMap,
+			Namespace: m.Namespace,
+		},
+	}
+
+	// Set RouterInstance as the owner and controller
+	ctrl.SetControllerReference(m, cm, r.Scheme)
+	return cm
+}
+
 // daemonSetForRouterInstance returns a kasicoRouter DaemonSet object
 func (r *RouterInstanceReconciler) daemonSetForRouterInstance(m *kasicov1.RouterInstance) *appsv1.DaemonSet {
 	ls := labelsForDaemonSet(m)
 
 	daemonSet := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
+			Name:      Name_Daemonset,
 			Namespace: m.Namespace,
 		},
 		Spec: appsv1.DaemonSetSpec{
@@ -144,9 +178,9 @@ func (r *RouterInstanceReconciler) daemonSetForRouterInstance(m *kasicov1.Router
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						Image: "nginx",
-						Name:  "kamailio",
+						Name:  Name_Container_Kamailio,
 						Ports: []corev1.ContainerPort{{
-							ContainerPort: 5060,
+							ContainerPort: Kamailio_Router_Sip_Port,
 							Name:          "sip",
 						}},
 					}},
@@ -166,7 +200,7 @@ func (r *RouterInstanceReconciler) serviceForRouterInstance(m *kasicov1.RouterIn
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
+			Name:      Name_Service,
 			Namespace: m.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
@@ -174,7 +208,7 @@ func (r *RouterInstanceReconciler) serviceForRouterInstance(m *kasicov1.RouterIn
 			Type:                  "LoadBalancer",
 			Selector:              ls,
 			Ports: []corev1.ServicePort{{
-				Port: 5060,
+				Port: Kamailio_Router_Sip_Port,
 				Name: "sip",
 			}},
 		},
