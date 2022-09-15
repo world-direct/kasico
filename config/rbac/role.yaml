@@ -32,6 +32,32 @@ rules:
 - apiGroups:
   - kasico.world-direct.at
   resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kasico.world-direct.at
+  resources:
+  - ingresses/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kasico.world-direct.at
+  resources:
+  - ingresses/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kasico.world-direct.at
+  resources:
   - routerinstances
   verbs:
   - create

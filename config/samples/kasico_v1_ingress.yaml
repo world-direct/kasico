@@ -3,4 +3,9 @@ kind: Ingress
 metadata:
   name: ingress-sample
 spec:
-  # TODO(user): Add fields here
+  ingressClassName: default
+  rules:
+  - host: tenant1.sip.example.org
+    backend:
+      service:
+        name: sip-server

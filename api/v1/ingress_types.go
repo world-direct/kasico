@@ -28,8 +28,23 @@ type IngressSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Ingress. Edit ingress_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// IngressClassName is the name of the ingressClass managed by this RouterInstance.
+	IngressClassName string `json:"ingressClassName,omitempty"`
+
+	Rules []IngressRule `json:"rules,omitempty"`
+}
+
+type IngressRule struct {
+	Host    string         `json:"host,omitempty"`
+	Backend IngressBackend `json:"backend,omitempty"`
+}
+
+type IngressBackend struct {
+	Service IngressBackendService `json:"service,omitempty"`
+}
+
+type IngressBackendService struct {
+	Name string `json:"name,omitempty"`
 }
 
 // IngressStatus defines the observed state of Ingress
