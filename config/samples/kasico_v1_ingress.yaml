@@ -1,0 +1,6 @@
+apiVersion: kasico.world-direct.at/v1
+kind: Ingress
+metadata:
+  name: ingress-sample
+spec:
+  # TODO(user): Add fields here

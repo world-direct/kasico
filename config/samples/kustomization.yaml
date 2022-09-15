@@ -1,4 +1,5 @@
 ## Append samples you want in your CSV to this file as resources ##
 resources:
 - kasico_v1_routerinstance.yaml
+- kasico_v1_ingress.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

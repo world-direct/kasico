@@ -16,4 +16,13 @@ resources:
   kind: RouterInstance
   path: github.com/world-direct/kasico/api/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: world-direct.at
+  group: kasico
+  kind: Ingress
+  path: github.com/world-direct/kasico/api/v1
+  version: v1
 version: "3"
