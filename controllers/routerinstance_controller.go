@@ -44,6 +44,8 @@ type RouterInstanceReconciler struct {
 //+kubebuilder:rbac:groups=kasico.world-direct.at,resources=routerinstances,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kasico.world-direct.at,resources=routerinstances/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=kasico.world-direct.at,resources=routerinstances/finalizers,verbs=update
+//+kubebuilder:rbac:groups=apps,resources=daemonSet,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=service,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -117,6 +119,8 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 func (r *RouterInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&kasicov1.RouterInstance{}).
+		Owns(&appsv1.DaemonSet{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }
 
