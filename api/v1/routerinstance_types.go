@@ -18,6 +18,7 @@ package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -46,6 +47,21 @@ type RouterServiceSpec struct {
 type RouterInstanceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Conditions represent the latest available observations of an object's state
+	Conditions []metav1.Condition `json:"conditions"`
+
+	// ConfigurationGeneration is incremented if the router pods need to be restarted
+	ConfigurationGeneration int `json:"configurationVersion,omitempty"`
+
+	// This list contains all ingresses for this router
+	Ingresses []IngressReference `json:"ingresses,omitempty"`
+}
+
+type IngressReference struct {
+	Namespace          string  `json:"namespace,omitempty"`
+	Name               string  `json:"name,omitempty"`
+	ReconciliationTime v1.Time `json:"reconciliationTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true

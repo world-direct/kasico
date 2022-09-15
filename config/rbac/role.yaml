@@ -20,6 +20,18 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmap
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - service
   verbs:
   - create

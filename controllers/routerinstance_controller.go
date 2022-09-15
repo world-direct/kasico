@@ -23,6 +23,7 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -46,6 +47,7 @@ type RouterInstanceReconciler struct {
 //+kubebuilder:rbac:groups=kasico.world-direct.at,resources=routerinstances/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=daemonSet,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=service,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=configmap,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -130,6 +132,24 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	} else if err != nil {
 		log.Error(err, "Failed to get ConfigMap")
 		return ctrl.Result{}, err
+	}
+
+	// record the reconciliation as a condition
+	meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
+		Type:    "reconciled",
+		Status:  metav1.ConditionTrue,
+		Reason:  "done",
+		Message: "reconciliation done",
+	})
+
+	routerInstance.Status.ConfigurationGeneration = 1
+
+	// update the status
+	err = r.Status().Update(ctx, routerInstance)
+	if err != nil {
+		log.Error(err, "Unable to update the status")
+	} else {
+		log.Info("Status Update performed", "resourceVersion", routerInstance.ObjectMeta.ResourceVersion)
 	}
 
 	return ctrl.Result{}, nil
