@@ -9,10 +9,10 @@ import (
 
 func TestRemoveFirst(t *testing.T) {
 	ingresses := []kasicov1.IngressReference{
-		kasicov1.IngressReference{Namespace: "default", Name: "name1"},
-		kasicov1.IngressReference{Namespace: "default", Name: "name2"},
-		kasicov1.IngressReference{Namespace: "default", Name: "name3"},
-		kasicov1.IngressReference{Namespace: "default", Name: "name4"},
+		{Namespace: "default", Name: "name1"},
+		{Namespace: "default", Name: "name2"},
+		{Namespace: "default", Name: "name3"},
+		{Namespace: "default", Name: "name4"},
 	}
 
 	res := removeIngressReferenceFromSlice(ingresses, 0)
@@ -24,10 +24,10 @@ func TestRemoveFirst(t *testing.T) {
 
 func TestRemoveLast(t *testing.T) {
 	ingresses := []kasicov1.IngressReference{
-		kasicov1.IngressReference{Namespace: "default", Name: "name1"},
-		kasicov1.IngressReference{Namespace: "default", Name: "name2"},
-		kasicov1.IngressReference{Namespace: "default", Name: "name3"},
-		kasicov1.IngressReference{Namespace: "default", Name: "name4"},
+		{Namespace: "default", Name: "name1"},
+		{Namespace: "default", Name: "name2"},
+		{Namespace: "default", Name: "name3"},
+		{Namespace: "default", Name: "name4"},
 	}
 
 	res := removeIngressReferenceFromSlice(ingresses, 3)
@@ -39,10 +39,10 @@ func TestRemoveLast(t *testing.T) {
 
 func TestRemoveMiddle(t *testing.T) {
 	ingresses := []kasicov1.IngressReference{
-		kasicov1.IngressReference{Namespace: "default", Name: "name1"},
-		kasicov1.IngressReference{Namespace: "default", Name: "name2"},
-		kasicov1.IngressReference{Namespace: "default", Name: "name3"},
-		kasicov1.IngressReference{Namespace: "default", Name: "name4"},
+		{Namespace: "default", Name: "name1"},
+		{Namespace: "default", Name: "name2"},
+		{Namespace: "default", Name: "name3"},
+		{Namespace: "default", Name: "name4"},
 	}
 
 	res := removeIngressReferenceFromSlice(ingresses, 1)
