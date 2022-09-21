@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 
 	kasicov1 "github.com/world-direct/kasico/api/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // HashStringMap returns a string representing a Hash over the name
@@ -52,4 +53,12 @@ func GetRoutingData(routerInstance *kasicov1.RouterInstance, allIngresses []kasi
 
 	return rd
 
+}
+
+func SetLabel(metadata *metav1.ObjectMeta, key string, value string) {
+	if metadata.Labels == nil {
+		metadata.Labels = make(map[string]string)
+	}
+
+	metadata.Labels[key] = value
 }
