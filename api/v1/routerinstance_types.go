@@ -32,6 +32,9 @@ type RouterInstanceSpec struct {
 	// IngressClassName is the name of the ingressClass managed by this RouterInstance.
 	IngressClassName string `json:"ingressClassName,omitempty"`
 
+	// TemplateConfigMapName is the name of the configMap for the kamailio config files.
+	TemplateConfigMapName string `json:"templateConfigMapName,omitempty"`
+
 	// RouterService defines configuration values for the generated service
 	RouterService RouterServiceSpec `json:"routerService,omitempty"`
 }
@@ -41,6 +44,14 @@ type RouterServiceSpec struct {
 
 	// Annotations allows the user to add annoations to the router service
 	Annotations map[string]string `json:"annotations,omitempty"`
+
+	//+kubebuilder:default=5060
+	UDPPort uint16 `json:"udpPort,omitempty"`
+
+	//+kubebuilder:default=0
+	TCPPort uint16 `json:"tcpPort,omitempty"`
+
+	AdvertiseAddress string `json:"advertiseAddress,omitempty"`
 }
 
 // RouterInstanceStatus defines the observed state of RouterInstance
@@ -53,6 +64,12 @@ type RouterInstanceStatus struct {
 
 	// ConfigurationGeneration is incremented if the router pods need to be restarted
 	ConfigurationGeneration int `json:"configurationVersion,omitempty"`
+
+	// TemplatesHash is used for change-tracking
+	TemplatesHash string `json:"templatesHash,omitempty"`
+
+	// RouterDataHash is used for change-tracking
+	RouterDataHash string `json:"routerDataHash,omitempty"`
 
 	// This list contains all ingresses for this router
 	Ingresses []IngressReference `json:"ingresses,omitempty"`

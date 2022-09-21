@@ -35,8 +35,13 @@ type IngressSpec struct {
 }
 
 type IngressRule struct {
-	Host    string         `json:"host,omitempty"`
+	Sip     IngressRuleSip `json:"sip,omitempty"`
 	Backend IngressBackend `json:"backend,omitempty"`
+}
+
+type IngressRuleSip struct {
+	Domain     string `json:"domain,omitempty"`
+	Headnumber string `json:"headnumber,omitempty"`
 }
 
 type IngressBackend struct {

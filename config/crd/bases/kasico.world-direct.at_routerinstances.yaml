@@ -43,13 +43,25 @@ spec:
                 description: RouterService defines configuration values for the generated
                   service
                 properties:
+                  advertiseAddress:
+                    type: string
                   annotations:
                     additionalProperties:
                       type: string
                     description: Annotations allows the user to add annoations to
                       the router service
                     type: object
+                  tcpPort:
+                    default: 0
+                    type: integer
+                  udpPort:
+                    default: 5060
+                    type: integer
                 type: object
+              templateConfigMapName:
+                description: TemplateConfigMapName is the name of the configMap for
+                  the kamailio config files.
+                type: string
             type: object
           status:
             description: RouterInstanceStatus defines the observed state of RouterInstance
@@ -141,6 +153,12 @@ spec:
                       type: string
                   type: object
                 type: array
+              routerDataHash:
+                description: RouterDataHash is used for change-tracking
+                type: string
+              templatesHash:
+                description: TemplatesHash is used for change-tracking
+                type: string
             required:
             - conditions
             type: object

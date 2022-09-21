@@ -5,7 +5,9 @@ metadata:
 spec:
   ingressClassName: default
   rules:
-  - host: tenant1.sip.example.org
+  - sip: 
+      domain: tenant1.sip.example.org
+      headnumber: "+43512334455"
     backend:
       service:
         name: sip-server

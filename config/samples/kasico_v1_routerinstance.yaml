@@ -4,7 +4,11 @@ metadata:
   name: routerinstance-sample
 spec:
   ingressClassName: default
+  templateConfigMapName: kamailio-templates
   routerService:
+    # https://github.com/kubernetes/kubernetes/pull/94028
+    tcpPort: 0
+    udpPort: 5060  
     annotations:
       metallb.universe.tf/address-pool: kamailio
       

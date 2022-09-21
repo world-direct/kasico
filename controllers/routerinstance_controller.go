@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"encoding/json"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
@@ -115,9 +117,9 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// Check if the ConfigMap already exists, if not create a new one
-	cm := &corev1.ConfigMap{}
-	err = r.Get(ctx, types.NamespacedName{Name: Name_ConfigMap, Namespace: routerInstance.Namespace}, cm)
+	// Check if the ConfigMap with the routing-data already exists, if not create a new one
+	cmRoutingData := &corev1.ConfigMap{}
+	err = r.Get(ctx, types.NamespacedName{Name: Name_ConfigMap, Namespace: routerInstance.Namespace}, cmRoutingData)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new ConfigMap
 		cm := r.configMapForRouterInstance(routerInstance)
@@ -132,6 +134,76 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	} else if err != nil {
 		log.Error(err, "Failed to get ConfigMap")
 		return ctrl.Result{}, err
+	}
+
+	// check for the templates configmap, and calculate the hash
+	cmTemplates := corev1.ConfigMap{}
+	err = r.Get(ctx, types.NamespacedName{Name: routerInstance.Spec.TemplateConfigMapName, Namespace: routerInstance.Namespace}, &cmTemplates)
+	if err != nil {
+		meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
+			Type:    "templatesRead",
+			Status:  metav1.ConditionFalse,
+			Reason:  "getError",
+			Message: err.Error(),
+		})
+	} else {
+		hash := HashStringMap(cmTemplates.Data)
+
+		if hash != routerInstance.Status.TemplatesHash {
+			log.Info("The hash of the templates have been changed, ...")
+		}
+
+		routerInstance.Status.TemplatesHash = hash
+		meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
+			Type:   "templatesRead",
+			Status: metav1.ConditionTrue,
+			Reason: "done",
+		})
+	}
+
+	// get all ingresses of the routerinstance and build the routing-data records
+	{
+		ingresses := &kasicov1.IngressList{}
+		err := r.Client.List(ctx, ingresses)
+		if err != nil {
+			log.Error(err, "unable to list the ingresses")
+			return ctrl.Result{}, err
+		}
+
+		routingData := GetRoutingData(routerInstance, ingresses.Items)
+		routerDataJsonBytes, err := json.MarshalIndent(routingData, "", "  ")
+
+		if err != nil {
+			log.Error(err, "unable to serialize router-data")
+			return ctrl.Result{}, err
+		}
+
+		routerDataMap := make(map[string]string)
+		routerDataMap["router-data.json"] = string(routerDataJsonBytes)
+		routerDataHash := HashStringMap(routerDataMap)
+
+		// check if the routerdata has been changed
+		if routerDataHash != routerInstance.Status.RouterDataHash {
+			log.Info("The hash of the data been changed, updating config-map")
+			cmRoutingData.Data = routerDataMap
+			err = r.Update(ctx, cmRoutingData)
+
+			if err != nil {
+				meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
+					Type:    "routingDataWritten",
+					Status:  metav1.ConditionFalse,
+					Reason:  "writeError",
+					Message: err.Error(),
+				})
+			} else {
+				routerInstance.Status.RouterDataHash = routerDataHash
+				meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
+					Type:   "routingDataWritten",
+					Status: metav1.ConditionTrue,
+					Reason: "done",
+				})
+			}
+		}
 	}
 
 	// record the reconciliation as a condition
@@ -183,6 +255,30 @@ func (r *RouterInstanceReconciler) configMapForRouterInstance(m *kasicov1.Router
 func (r *RouterInstanceReconciler) daemonSetForRouterInstance(m *kasicov1.RouterInstance) *appsv1.DaemonSet {
 	ls := labelsForDaemonSet(m)
 
+	ports := []corev1.ContainerPort{}
+
+	if m.Spec.RouterService.UDPPort != 0 {
+		ports = append(ports, corev1.ContainerPort{
+			ContainerPort: int32(m.Spec.RouterService.UDPPort),
+			Protocol:      "UDP",
+			Name:          "sip-udp",
+		})
+	}
+
+	if m.Spec.RouterService.TCPPort != 0 {
+		ports = append(ports, corev1.ContainerPort{
+			ContainerPort: int32(m.Spec.RouterService.TCPPort),
+			Protocol:      "TCP",
+			Name:          "sip-tcp",
+		})
+	}
+
+	kamailioContainer := corev1.Container{
+		Image: "nginx",
+		Name:  Name_Container_Kamailio,
+		Ports: ports,
+	}
+
 	daemonSet := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      Name_Daemonset,
@@ -197,14 +293,7 @@ func (r *RouterInstanceReconciler) daemonSetForRouterInstance(m *kasicov1.Router
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Image: "nginx",
-						Name:  Name_Container_Kamailio,
-						Ports: []corev1.ContainerPort{{
-							ContainerPort: Kamailio_Router_Sip_Port,
-							Name:          "sip",
-						}},
-					}},
+					Containers: []corev1.Container{kamailioContainer},
 				},
 			},
 		},
@@ -219,6 +308,24 @@ func (r *RouterInstanceReconciler) daemonSetForRouterInstance(m *kasicov1.Router
 func (r *RouterInstanceReconciler) serviceForRouterInstance(m *kasicov1.RouterInstance) *corev1.Service {
 	ls := labelsForDaemonSet(m)
 
+	ports := []corev1.ServicePort{}
+
+	if m.Spec.RouterService.UDPPort != 0 {
+		ports = append(ports, corev1.ServicePort{
+			Port:     int32(m.Spec.RouterService.UDPPort),
+			Protocol: "UDP",
+			Name:     "sip-udp",
+		})
+	}
+
+	if m.Spec.RouterService.TCPPort != 0 {
+		ports = append(ports, corev1.ServicePort{
+			Port:     int32(m.Spec.RouterService.TCPPort),
+			Protocol: "TCP",
+			Name:     "sip-tcp",
+		})
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      Name_Service,
@@ -228,10 +335,7 @@ func (r *RouterInstanceReconciler) serviceForRouterInstance(m *kasicov1.RouterIn
 			ExternalTrafficPolicy: "Local",
 			Type:                  "LoadBalancer",
 			Selector:              ls,
-			Ports: []corev1.ServicePort{{
-				Port: Kamailio_Router_Sip_Port,
-				Name: "sip",
-			}},
+			Ports:                 ports,
 		},
 	}
 
