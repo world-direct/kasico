@@ -140,19 +140,6 @@ spec:
                 description: ConfigurationGeneration is incremented if the router
                   pods need to be restarted
                 type: integer
-              ingresses:
-                description: This list contains all ingresses for this router
-                items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                    reconciliationTime:
-                      format: date-time
-                      type: string
-                  type: object
-                type: array
               routerDataHash:
                 description: RouterDataHash is used for change-tracking
                 type: string

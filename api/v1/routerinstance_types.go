@@ -18,7 +18,6 @@ package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -70,15 +69,6 @@ type RouterInstanceStatus struct {
 
 	// RouterDataHash is used for change-tracking
 	RouterDataHash string `json:"routerDataHash,omitempty"`
-
-	// This list contains all ingresses for this router
-	Ingresses []IngressReference `json:"ingresses,omitempty"`
-}
-
-type IngressReference struct {
-	Namespace          string  `json:"namespace,omitempty"`
-	Name               string  `json:"name,omitempty"`
-	ReconciliationTime v1.Time `json:"reconciliationTime,omitempty"`
 }
 
 //+kubebuilder:object:root=true
