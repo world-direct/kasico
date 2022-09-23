@@ -3,6 +3,7 @@ package controllers
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"sort"
 
 	kasicov1 "github.com/world-direct/kasico/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,9 +14,16 @@ import (
 func HashStringMap(items map[string]string) string {
 	md5 := md5.New()
 
-	for key, val := range items {
+	keys := make([]string, len(items))
+	for key := range items {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	for _, key := range keys {
 		md5.Write([]byte(key))
-		md5.Write([]byte(val))
+		md5.Write([]byte(items[key]))
 	}
 
 	final := "md5:" + hex.EncodeToString(md5.Sum(nil))

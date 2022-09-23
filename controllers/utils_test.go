@@ -66,3 +66,18 @@ func TestHashStringMap_DifferentValues(t *testing.T) {
 	h2 := HashStringMap(m2)
 	assert.NotEqual(t, h1, h2)
 }
+
+func TestHashStringMap_NormalizedSortOrder(t *testing.T) {
+	m1 := make(map[string]string)
+	m2 := make(map[string]string)
+
+	m1["data"] = "v1"
+	m1["data2"] = "v2"
+
+	m2["data2"] = "v2"
+	m2["data"] = "v1"
+
+	h1 := HashStringMap(m1)
+	h2 := HashStringMap(m2)
+	assert.Equal(t, h1, h2)
+}
