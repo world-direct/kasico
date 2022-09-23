@@ -17,8 +17,6 @@ limitations under the License.
 package controllers
 
 import (
-	"encoding/json"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
@@ -160,51 +158,6 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			Status: metav1.ConditionTrue,
 			Reason: "done",
 		})
-	}
-
-	// get all ingresses of the routerinstance and build the routing-data records
-	{
-		ingresses := &kasicov1.IngressList{}
-		err := r.Client.List(ctx, ingresses)
-		if err != nil {
-			log.Error(err, "unable to list the ingresses")
-			return ctrl.Result{}, err
-		}
-
-		routingData := GetRoutingData(routerInstance, ingresses.Items)
-		routerDataJsonBytes, err := json.MarshalIndent(routingData, "", "  ")
-
-		if err != nil {
-			log.Error(err, "unable to serialize router-data")
-			return ctrl.Result{}, err
-		}
-
-		routerDataMap := make(map[string]string)
-		routerDataMap["router-data.json"] = string(routerDataJsonBytes)
-		routerDataHash := HashStringMap(routerDataMap)
-
-		// check if the routerdata has been changed
-		if routerDataHash != routerInstance.Status.RouterDataHash {
-			log.Info("The hash of the data been changed, updating config-map")
-			cmRoutingData.Data = routerDataMap
-			err = r.Update(ctx, cmRoutingData)
-
-			if err != nil {
-				meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
-					Type:    "routingDataWritten",
-					Status:  metav1.ConditionFalse,
-					Reason:  "writeError",
-					Message: err.Error(),
-				})
-			} else {
-				routerInstance.Status.RouterDataHash = routerDataHash
-				meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
-					Type:   "routingDataWritten",
-					Status: metav1.ConditionTrue,
-					Reason: "done",
-				})
-			}
-		}
 	}
 
 	// record the reconciliation as a condition

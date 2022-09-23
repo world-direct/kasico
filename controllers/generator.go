@@ -2,9 +2,14 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	"github.com/go-logr/logr"
+	kasicov1 "github.com/world-direct/kasico/api/v1"
 	"github.com/world-direct/kasico/controllers/debounce"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -21,7 +26,7 @@ import (
 //	  * Avoid optimistic update errors because we modify objects outside of their reconcilers
 
 type generator struct {
-	client client.Client
+	Client client.Client
 	f      func(f func())
 }
 
@@ -32,7 +37,7 @@ type Generator interface {
 
 func NewGenerator(client client.Client, debounceTime time.Duration) Generator {
 	generator := &generator{
-		client: client,
+		Client: client,
 		f:      debounce.New(debounceTime),
 	}
 
@@ -61,5 +66,72 @@ func (generator *generator) OnObjectsChanged(ctx context.Context) {
 
 func (generator *generator) reconcile(ctx context.Context) {
 	log := ctrllog.FromContext(ctx)
-	log.Info("GENERATOR!")
+
+	for retry := 0; retry < 5; retry++ {
+		log.Info("Running Generator", "retry", retry)
+		err := generator.reconcileImpl(ctx, log)
+		if err == nil {
+			log.Info("Generator finished")
+			return
+		}
+
+		log.Error(err, "Error running Generator")
+	}
+
+}
+
+func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) error {
+
+	var err error
+	routers := &kasicov1.RouterInstanceList{}
+	err = generator.Client.List(ctx, routers)
+	if err != nil {
+		return err
+	}
+
+	ingresses := &kasicov1.IngressList{}
+	err = generator.Client.List(ctx, ingresses)
+	if err != nil {
+		return err
+	}
+
+	for _, router := range routers.Items {
+		routingData := GetRoutingData(router, ingresses.Items)
+
+		routerDataJsonBytes, err := json.MarshalIndent(routingData, "", "  ")
+		if err != nil {
+			return err
+		}
+
+		routerDataMap := make(map[string]string)
+		routerDataMap["router-data.json"] = string(routerDataJsonBytes)
+		routerDataHash := HashStringMap(routerDataMap)
+
+		cmRoutingData := &corev1.ConfigMap{}
+		err = generator.Client.Get(ctx, types.NamespacedName{Name: Name_ConfigMap, Namespace: router.Namespace}, cmRoutingData)
+		if err != nil {
+			return err
+		}
+
+		existingHash := GetAnnotation(&cmRoutingData.ObjectMeta, "kasico.hash")
+
+		// check if the routerdata has been changed
+		if routerDataHash != existingHash {
+			log.Info("The hash of the data been changed, updating " + Name_ConfigMap)
+
+			cmRoutingData.Data = routerDataMap
+			SetAnnotation(&cmRoutingData.ObjectMeta, "kasico.hash", routerDataHash)
+			err = generator.Client.Update(ctx, cmRoutingData)
+
+			if err != nil {
+				log.Error(err, "Unable to update the routing-data configmap!")
+				return err
+			}
+
+			log.Info("Successfully updated the ConfigMap")
+		}
+	}
+
+	return nil
+
 }

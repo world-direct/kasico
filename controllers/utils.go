@@ -30,7 +30,7 @@ func HashStringMap(items map[string]string) string {
 	return final
 }
 
-func GetRoutingData(routerInstance *kasicov1.RouterInstance, allIngresses []kasicov1.Ingress) *RoutingData {
+func GetRoutingData(routerInstance kasicov1.RouterInstance, allIngresses []kasicov1.Ingress) *RoutingData {
 
 	rd := &RoutingData{
 		UDPPort:          routerInstance.Spec.RouterService.UDPPort,
@@ -69,4 +69,40 @@ func SetLabel(metadata *metav1.ObjectMeta, key string, value string) {
 	}
 
 	metadata.Labels[key] = value
+}
+
+func GetLabel(metadata *metav1.ObjectMeta, key string) string {
+	if metadata.Labels == nil {
+		return ""
+	}
+
+	for lkey, lvalue := range metadata.Labels {
+		if key == lkey {
+			return lvalue
+		}
+	}
+
+	return ""
+}
+
+func SetAnnotation(metadata *metav1.ObjectMeta, key string, value string) {
+	if metadata.Annotations == nil {
+		metadata.Annotations = make(map[string]string)
+	}
+
+	metadata.Annotations[key] = value
+}
+
+func GetAnnotation(metadata *metav1.ObjectMeta, key string) string {
+	if metadata.Annotations == nil {
+		return ""
+	}
+
+	for lkey, lvalue := range metadata.Annotations {
+		if key == lkey {
+			return lvalue
+		}
+	}
+
+	return ""
 }
