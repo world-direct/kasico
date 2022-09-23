@@ -19,11 +19,8 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,7 +33,8 @@ import (
 // IngressReconciler reconciles a Ingress object
 type IngressReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme    *runtime.Scheme
+	Generator Generator
 }
 
 //+kubebuilder:rbac:groups=kasico.world-direct.at,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
@@ -55,7 +53,7 @@ type IngressReconciler struct {
 func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 
 	log := ctrllog.FromContext(ctx)
-	log.Info("Reconcile Ingress")
+	log.V(2).Info("Reconcile Ingress")
 
 	// at startup all ingress objects are reconciled. This would need to be debounced to avoid state
 	// configuration on startup.
@@ -73,6 +71,7 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
 			log.Info("Ingress resource not found. Ignoring since object must be deleted.")
+			r.Generator.OnObjectsChanged(ctx)
 			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
@@ -80,38 +79,40 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
-	routerInstance, err := r.getRouterInstance(ctx, log, ingress)
-	if err != nil {
-		meta.SetStatusCondition(&ingress.Status.Conditions, metav1.Condition{
-			Type:    "routerReconciled",
-			Status:  metav1.ConditionFalse,
-			Reason:  "failed",
-			Message: err.Error(),
-		})
+	// routerInstance, err := r.getRouterInstance(ctx, log, ingress)
+	// if err != nil {
+	// 	meta.SetStatusCondition(&ingress.Status.Conditions, metav1.Condition{
+	// 		Type:    "routerReconciled",
+	// 		Status:  metav1.ConditionFalse,
+	// 		Reason:  "failed",
+	// 		Message: err.Error(),
+	// 	})
 
-		err = r.Status().Update(ctx, ingress)
-		return ctrl.Result{}, err
-	}
+	// 	err = r.Status().Update(ctx, ingress)
+	// 	return ctrl.Result{}, err
+	// }
 
-	// label the routerinstance so that this will trigger it to be reconciled
-	log.Info("Label the routerinstance to trigger reconciliation", "routerInstance.ingressClassName", routerInstance.Spec.IngressClassName)
-	SetLabel(&routerInstance.ObjectMeta, "reconciled-by", ingress.Namespace+"."+ingress.Name)
-	err = r.Update(ctx, routerInstance)
-	if err != nil {
-		return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
-	}
+	r.Generator.OnObjectsChanged(ctx)
 
-	meta.SetStatusCondition(&ingress.Status.Conditions, metav1.Condition{
-		Type:    "routerReconciled",
-		Status:  metav1.ConditionTrue,
-		Reason:  "done",
-		Message: "reconciliation done",
-	})
+	// // label the routerinstance so that this will trigger it to be reconciled
+	// log.Info("Label the routerinstance to trigger reconciliation", "routerInstance.ingressClassName", routerInstance.Spec.IngressClassName)
+	// SetLabel(&routerInstance.ObjectMeta, "reconciled-by", ingress.Namespace+"."+ingress.Name)
+	// err = r.Update(ctx, routerInstance)
+	// if err != nil {
+	// 	return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
+	// }
 
-	err = r.Status().Update(ctx, ingress)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	// meta.SetStatusCondition(&ingress.Status.Conditions, metav1.Condition{
+	// 	Type:    "routerReconciled",
+	// 	Status:  metav1.ConditionTrue,
+	// 	Reason:  "done",
+	// 	Message: "reconciliation done",
+	// })
+
+	// err = r.Status().Update(ctx, ingress)
+	// if err != nil {
+	// 	return ctrl.Result{}, err
+	// }
 
 	return ctrl.Result{}, nil
 }

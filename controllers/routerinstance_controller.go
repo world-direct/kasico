@@ -41,7 +41,8 @@ import (
 // RouterInstanceReconciler reconciles a RouterInstance object
 type RouterInstanceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme    *runtime.Scheme
+	Generator Generator
 }
 
 //+kubebuilder:rbac:groups=kasico.world-direct.at,resources=routerinstances,verbs=get;list;watch;create;update;patch;delete
@@ -61,7 +62,7 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// based on https://github.com/operator-framework/operator-sdk/blob/latest/testdata/go/v3/memcached-operator/controllers/memcached_controller.go
 
 	log := ctrllog.FromContext(ctx)
-	log.Info("Reconcile RouterInstance")
+	log.V(2).Info("Reconcile RouterInstance")
 
 	// Fetch the RouterInstance instance
 	routerInstance := &kasicov1.RouterInstance{}
@@ -150,7 +151,7 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		hash := HashStringMap(cmTemplates.Data)
 
 		if hash != routerInstance.Status.TemplatesHash {
-			log.Info("The hash of the templates have been changed, ...")
+			log.Info("The hash of the templates have been changed, ...", "oldHash", routerInstance.Status.TemplatesHash, "newHash", hash)
 		}
 
 		routerInstance.Status.TemplatesHash = hash
@@ -224,6 +225,7 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		log.Info("Status Update performed", "resourceVersion", routerInstance.ObjectMeta.ResourceVersion)
 	}
 
+	r.Generator.OnObjectsChanged(ctx)
 	return ctrl.Result{}, nil
 }
 
