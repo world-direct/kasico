@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	kasicov1 "github.com/world-direct/kasico/api/v1"
-	"github.com/world-direct/kasico/controllers/debounce"
+	kasicov1 "github.com/world-direct/kasico/operator/api/v1"
+	"github.com/world-direct/kasico/operator/controllers/debounce"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"

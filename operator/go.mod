@@ -1,4 +1,4 @@
-module github.com/world-direct/kasico
+module github.com/world-direct/kasico/operator
 
 go 1.18
 

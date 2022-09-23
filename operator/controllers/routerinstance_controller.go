@@ -33,7 +33,7 @@ import (
 
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	kasicov1 "github.com/world-direct/kasico/api/v1"
+	kasicov1 "github.com/world-direct/kasico/operator/api/v1"
 )
 
 // RouterInstanceReconciler reconciles a RouterInstance object

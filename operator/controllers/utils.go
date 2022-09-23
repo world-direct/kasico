@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"sort"
 
-	kasicov1 "github.com/world-direct/kasico/api/v1"
+	kasicov1 "github.com/world-direct/kasico/operator/api/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
