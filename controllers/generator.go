@@ -106,7 +106,7 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 		}
 
 		routerDataMap := make(map[string]string)
-		routerDataMap["router-data.json"] = string(routerDataJsonBytes)
+		routerDataMap[Name_RouningDataJson] = string(routerDataJsonBytes)
 		routerDataHash := HashStringMap(routerDataMap)
 
 		cmRoutingData := &corev1.ConfigMap{}
@@ -115,14 +115,14 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 			return err
 		}
 
-		existingHash := GetAnnotation(&cmRoutingData.ObjectMeta, "kasico.hash")
+		existingHash := GetAnnotation(&cmRoutingData.ObjectMeta, Name_AnnotationRoutingDataHash)
 
 		// check if the routerdata has been changed
 		if routerDataHash != existingHash {
 			log.Info("The hash of the data been changed, updating " + Name_ConfigMap)
 
 			cmRoutingData.Data = routerDataMap
-			SetAnnotation(&cmRoutingData.ObjectMeta, "kasico.hash", routerDataHash)
+			SetAnnotation(&cmRoutingData.ObjectMeta, Name_AnnotationRoutingDataHash, routerDataHash)
 			err = generator.Client.Update(ctx, cmRoutingData)
 
 			if err != nil {
