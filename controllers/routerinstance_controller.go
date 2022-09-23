@@ -62,6 +62,10 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	log := ctrllog.FromContext(ctx)
 	log.V(2).Info("Reconcile RouterInstance")
 
+	// we notify the generator, because it implements debouncing, and implements the logic
+	// to check if an update is really needed.
+	r.Generator.OnObjectsChanged(ctx)
+
 	// Fetch the RouterInstance instance
 	routerInstance := &kasicov1.RouterInstance{}
 	err := r.Get(ctx, req.NamespacedName, routerInstance)
@@ -135,31 +139,6 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	// check for the templates configmap, and calculate the hash
-	cmTemplates := corev1.ConfigMap{}
-	err = r.Get(ctx, types.NamespacedName{Name: routerInstance.Spec.TemplateConfigMapName, Namespace: routerInstance.Namespace}, &cmTemplates)
-	if err != nil {
-		meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
-			Type:    "templatesRead",
-			Status:  metav1.ConditionFalse,
-			Reason:  "getError",
-			Message: err.Error(),
-		})
-	} else {
-		hash := HashStringMap(cmTemplates.Data)
-
-		if hash != routerInstance.Status.TemplatesHash {
-			log.Info("The hash of the templates have been changed, ...", "oldHash", routerInstance.Status.TemplatesHash, "newHash", hash)
-		}
-
-		routerInstance.Status.TemplatesHash = hash
-		meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
-			Type:   "templatesRead",
-			Status: metav1.ConditionTrue,
-			Reason: "done",
-		})
-	}
-
 	// record the reconciliation as a condition
 	meta.SetStatusCondition(&routerInstance.Status.Conditions, metav1.Condition{
 		Type:    "reconciled",
@@ -167,8 +146,6 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Reason:  "done",
 		Message: "reconciliation done",
 	})
-
-	routerInstance.Status.ConfigurationGeneration = 1
 
 	// update the status
 	err = r.Status().Update(ctx, routerInstance)
@@ -178,7 +155,6 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		log.Info("Status Update performed", "resourceVersion", routerInstance.ObjectMeta.ResourceVersion)
 	}
 
-	r.Generator.OnObjectsChanged(ctx)
 	return ctrl.Result{}, nil
 }
 
@@ -208,7 +184,7 @@ func (r *RouterInstanceReconciler) configMapForRouterInstance(m *kasicov1.Router
 
 // daemonSetForRouterInstance returns a kasicoRouter DaemonSet object
 func (r *RouterInstanceReconciler) daemonSetForRouterInstance(m *kasicov1.RouterInstance) *appsv1.DaemonSet {
-	ls := labelsForDaemonSet(m)
+	ls := routerPodLabels(m)
 
 	ports := []corev1.ContainerPort{}
 
@@ -261,7 +237,7 @@ func (r *RouterInstanceReconciler) daemonSetForRouterInstance(m *kasicov1.Router
 
 // serviceForRouterInstance returns a kasicoRouter Service object
 func (r *RouterInstanceReconciler) serviceForRouterInstance(m *kasicov1.RouterInstance) *corev1.Service {
-	ls := labelsForDaemonSet(m)
+	ls := routerPodLabels(m)
 
 	ports := []corev1.ServicePort{}
 
@@ -299,8 +275,8 @@ func (r *RouterInstanceReconciler) serviceForRouterInstance(m *kasicov1.RouterIn
 	return service
 }
 
-// labelsForDaemonSet returns the labels for selecting the resources
+// routerPodLabels returns the labels for selecting the resources
 // belonging to the given kasico CR name.
-func labelsForDaemonSet(m *kasicov1.RouterInstance) map[string]string {
+func routerPodLabels(m *kasicov1.RouterInstance) map[string]string {
 	return map[string]string{"app": "kasico-router"}
 }

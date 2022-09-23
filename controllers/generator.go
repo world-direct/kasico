@@ -98,6 +98,8 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 	for _, router := range routers.Items {
 		routingData := GetRoutingData(router, ingresses.Items)
 
+		log = log.WithValues("ingressClassName", router.Spec.IngressClassName)
+
 		routerDataJsonBytes, err := json.MarshalIndent(routingData, "", "  ")
 		if err != nil {
 			return err
@@ -129,6 +131,8 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 			}
 
 			log.Info("Successfully updated the ConfigMap")
+		} else {
+			log.Info("Nothing has changed")
 		}
 	}
 

@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/go-logr/logr"
 	kasicov1 "github.com/world-direct/kasico/api/v1"
 )
 
@@ -55,12 +53,9 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	log := ctrllog.FromContext(ctx)
 	log.V(2).Info("Reconcile Ingress")
 
-	// at startup all ingress objects are reconciled. This would need to be debounced to avoid state
-	// configuration on startup.
-	// to resolve this, this controller just inserts a reference to itself into the routerinstance.status.ingresses field.
-	// this is reconciliated later on, with debouncing
-
-	// https://sdk.operatorframework.io/docs/building-operators/golang/advanced-topics/#handle-cleanup-on-deletion
+	// we notify the generator, because it implements debouncing, and implements the logic
+	// to check if an update is really needed.
+	r.Generator.OnObjectsChanged(ctx)
 
 	// Fetch the Ingress
 	ingress := &kasicov1.Ingress{}
@@ -71,67 +66,16 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
 			log.Info("Ingress resource not found. Ignoring since object must be deleted.")
-			r.Generator.OnObjectsChanged(ctx)
+
 			return ctrl.Result{}, nil
 		}
+
 		// Error reading the object - requeue the request.
 		log.Error(err, "Failed to get Ingress")
 		return ctrl.Result{}, err
 	}
 
-	// routerInstance, err := r.getRouterInstance(ctx, log, ingress)
-	// if err != nil {
-	// 	meta.SetStatusCondition(&ingress.Status.Conditions, metav1.Condition{
-	// 		Type:    "routerReconciled",
-	// 		Status:  metav1.ConditionFalse,
-	// 		Reason:  "failed",
-	// 		Message: err.Error(),
-	// 	})
-
-	// 	err = r.Status().Update(ctx, ingress)
-	// 	return ctrl.Result{}, err
-	// }
-
-	r.Generator.OnObjectsChanged(ctx)
-
-	// // label the routerinstance so that this will trigger it to be reconciled
-	// log.Info("Label the routerinstance to trigger reconciliation", "routerInstance.ingressClassName", routerInstance.Spec.IngressClassName)
-	// SetLabel(&routerInstance.ObjectMeta, "reconciled-by", ingress.Namespace+"."+ingress.Name)
-	// err = r.Update(ctx, routerInstance)
-	// if err != nil {
-	// 	return ctrl.Result{Requeue: true, RequeueAfter: 5 * time.Second}, err
-	// }
-
-	// meta.SetStatusCondition(&ingress.Status.Conditions, metav1.Condition{
-	// 	Type:    "routerReconciled",
-	// 	Status:  metav1.ConditionTrue,
-	// 	Reason:  "done",
-	// 	Message: "reconciliation done",
-	// })
-
-	// err = r.Status().Update(ctx, ingress)
-	// if err != nil {
-	// 	return ctrl.Result{}, err
-	// }
-
 	return ctrl.Result{}, nil
-}
-
-func (r *IngressReconciler) getRouterInstance(ctx context.Context, log logr.Logger, ingress *kasicov1.Ingress) (*kasicov1.RouterInstance, error) {
-
-	list := &kasicov1.RouterInstanceList{}
-	err := r.Client.List(ctx, list)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, routerInstance := range list.Items {
-		if routerInstance.Spec.IngressClassName == ingress.Spec.IngressClassName {
-			return &routerInstance, nil
-		}
-	}
-
-	return nil, fmt.Errorf("Unable to find a RouterInstance with ingressClassName='%s'", ingress.Spec.IngressClassName)
 }
 
 // SetupWithManager sets up the controller with the Manager.
