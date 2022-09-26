@@ -138,7 +138,7 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 			needGeneration = true
 
 			router.Status.TemplatesHash = HashStringMap(router.Spec.KamailioConfigTemplates)
-			err = generator.Client.Update(ctx, &router)
+			err = generator.Client.Status().Update(ctx, &router)
 			if err != nil {
 				log.Error(err, "Unable to update the TemplatesHash of the router status!")
 				return err
