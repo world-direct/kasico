@@ -28,6 +28,12 @@ func main() {
 	}
 
 	namespace := flag.String("namespace", "", "The namespace to watch")
+	dataConfigMap := flag.String("cm-data", "routing-data", "The name of the routing-data configmap, default 'routing-data'")
+	templateConfigMap := flag.String("cm-templates", "", "The name of the routing-data configmap")
+	configDir := flag.String("configDirectory", "", "The name of the directory to emit the configuration")
+
+	var cmTemplates *corev1.ConfigMap
+	var cmData *corev1.ConfigMap
 
 	flag.Parse()
 
@@ -65,6 +71,26 @@ func main() {
 		return
 	}
 
+	onChange := func(obj *corev1.ConfigMap, changeType string) {
+		fmt.Printf("onChange (%s): %v\n", changeType, obj.Name)
+
+		relevantChange := false
+
+		if obj.Name == *dataConfigMap {
+			cmData = obj
+			relevantChange = true
+		}
+
+		if obj.Name == *templateConfigMap {
+			cmTemplates = obj
+			relevantChange = true
+		}
+
+		if relevantChange && cmData != nil && cmTemplates != nil {
+			generate(cmTemplates.Data, cmData.Data["routing-data.json"], *configDir)
+		}
+	}
+
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(obj interface{}) { onChange(obj.(*corev1.ConfigMap), "add") },
 		UpdateFunc: func(_ interface{}, newObj interface{}) { onChange(newObj.(*corev1.ConfigMap), "update") },
@@ -74,6 +100,6 @@ func main() {
 	<-stopper
 }
 
-func onChange(obj *corev1.ConfigMap, changeType string) {
-	fmt.Printf("onChange (%s): %v\n", changeType, obj.Name)
+func generate(templates map[string]string, routingDataJson string, outputDirectory string) {
+	fmt.Printf("Generating routing-data to %s\n", outputDirectory)
 }
