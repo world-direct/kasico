@@ -115,6 +115,14 @@ build: generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go -zap-log-level=2
 
+.PHONY: run-watcher
+run-watcher: fmt vet ## Run a the watcher from your host.
+	go run ./main.go --mode=watcher -zap-log-level=2
+
+.PHONY: run-generator
+run-generator: fmt vet ## Run a the watcher from your host.
+	go run ./main.go --mode=generator -zap-log-level=2
+
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
 	docker build -t ${IMG} .

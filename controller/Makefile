@@ -51,5 +51,5 @@ build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
 .PHONY: run
-run: fmt vet ## Run a controller from your host.
-	go run ./main.go --configDirectory /tmp --cm-templates=kamailio-templates --cm-data=routing-data --namespace=kasico-default
+run: fmt vet ## Run a controller from your host.  --configDirectory /tmp --cm-templates=kamailio-templates --cm-data=routing-data --namespace=kasico-default
+	go run ./main.go 

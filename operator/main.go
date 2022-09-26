@@ -18,12 +18,15 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"go.uber.org/zap/zapcore"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/tools/cache"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -34,6 +37,9 @@ import (
 
 	kasicov1 "github.com/world-direct/kasico/operator/api/v1"
 	"github.com/world-direct/kasico/operator/controllers"
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/spf13/cobra"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -50,21 +56,77 @@ func init() {
 }
 
 func main() {
+
+	var argDevelopment bool
+
+	rootCmd := &cobra.Command{
+		Use:   "kasico",
+		Short: "Kasico stands for is KAmailio Sip Ingress COntroller",
+	}
+
+	// this flag is registered directly to the commandline flags by the controller-runtime
+	// https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/client/config/config.go#L39
+	// we don't do anything with this flag here, it's just so that cobra knows about it, and generated
+	// correct documentation with --help, or completion
+	_ = rootCmd.Flags().String("kubeconfig", "", "Paths to a kubeconfig. Only required if out-of-cluster.")
+	rootCmd.Flags().BoolVar(&argDevelopment, "development", false, "Enables development mode incl verbose logging")
+
+	operatorCmd := &cobra.Command{
+		Use:   "operator",
+		Short: "Runs the kasico operator",
+	}
+
+	controllerCmd := &cobra.Command{
+		Use:   "controller",
+		Short: "Runs the kasico controller",
+	}
+
+	controllerWatchCmd := &cobra.Command{
+		Use:   "watch",
+		Short: "Runs the kasico controller in watch mode",
+	}
+
+	controllerGenerateCmd := &cobra.Command{
+		Use:   "generate",
+		Short: "Runs the kasico controller in generation mode",
+	}
+
+	controllerCmd.AddCommand(controllerWatchCmd)
+	controllerCmd.AddCommand(controllerGenerateCmd)
+
+	rootCmd.AddCommand(operatorCmd)
+	rootCmd.AddCommand(controllerCmd)
+
+	rootCmd.Execute()
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var mode string
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false, "Enable leader election for controller manager. ")
+
 	opts := zap.Options{
-		Development: true,
+		Development: argDevelopment,
+		TimeEncoder: zapcore.RFC3339TimeEncoder,
 	}
-	opts.BindFlags(flag.CommandLine)
+
+	if argDevelopment {
+		opts.Level = zapcore.Level(-2)
+	}
+
+	// we really don't want to provide all these options, as they don't bring really value
+	// we will reduce this to a general "debug" argument
+	// opts.BindFlags(flag.CommandLine)	// this is also not very compatible to cobra
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	if mode != "operator" {
+		enableLeaderElection = false
+	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
@@ -89,6 +151,47 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	switch mode {
+	case "operator":
+		main_operator(mgr)
+
+	case "watcher":
+		main_watcher(mgr)
+	}
+}
+
+func main_generator(mgr ctrl.Manager) {
+	setupLog.Info("Starting Kasico Generator")
+
+}
+
+func main_watcher(mgr ctrl.Manager) {
+	setupLog.Info("Starting Kasico Watcher")
+	ctx := ctrl.SetupSignalHandler()
+
+	informer, err := mgr.GetCache().GetInformer(ctx, &corev1.ConfigMap{})
+	if err != nil {
+		setupLog.Error(err, "Unable to get informer")
+	}
+
+	onChange := func(obj *corev1.ConfigMap, changeType string) {
+		fmt.Printf("onChange (%s): %v\n", changeType, obj.Name)
+	}
+
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj interface{}) {},
+		UpdateFunc: func(_ interface{}, newObj interface{}) { onChange(newObj.(*corev1.ConfigMap), "update") },
+		DeleteFunc: func(obj interface{}) {},
+	})
+
+	mgr.Start(ctx)
+
+}
+
+func main_operator(mgr ctrl.Manager) {
+
+	var err error
 
 	genenerator := controllers.NewGenerator(mgr.GetClient(), time.Second*5)
 
