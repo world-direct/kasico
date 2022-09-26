@@ -73,9 +73,7 @@ data:
     loadmodule "app_python3.so"
     loadmodule "jsonrpcs.so"
     loadmodule "ctl.so"
-    loadmodule "db_mysql.so"
-    loadmodule "pv.so"          # Pseudo variables: Needed to use variables in config file
-    loadmodule "tm.so"          # transaction module
+    loadmodule "pv.so"          # Pseudo variables: Needed to use variables in config file      # transaction module
     loadmodule "sl.so"          # stateless replies
     loadmodule "siputils.so"    # ??
     loadmodule "xlog.so"        # logging
@@ -93,48 +91,49 @@ data:
     modparam("jsonrpcs", "pretty_format", 1)
 
 
-    # ----- tm params -----
-    # auto-discard branches from previous serial forking leg
-    modparam("tm", "failure_reply_mode", 3)
-    # default retransmission timeout: 30sec
-    modparam("tm", "fr_timer", 30000)
-    # default invite retransmission timeout after 1xx: 120sec
-    modparam("tm", "fr_inv_timer", 120000)
-
-
     # enable trace
     modparam("debugger", "cfgtrace", 1)
     # load python file
-    modparam("app_python3", "load", "/etc/kamailio/test.py")
+    modparam("app_python3", "load", "/etc/kamailio/main.py")
 
-    cfgengine "python"  
-
-  test.py: |
-    ## Kamailio - equivalent of routing blocks in Python
+    cfgengine "python"
+  main.py: |
+    # Kamailio - equivalent of routing blocks in Python
     ##
-    ## KSR - the new dynamic object exporting Kamailio functions
-    ## Router - the old object exporting Kamailio functions
-    ## test
+    # KSR - the new dynamic object exporting Kamailio functions
+    # Router - the old object exporting Kamailio functions
+    ##
 
-    ## Relevant remarks:
-    ##  * return code -255 is used to propagate the 'exit' behaviour to the
-    ##  parent route block function. The alternative is to use the native
-    ##  Python function sys.exit() (or exit()) -- it throws an exception that
-    ##  is caught by Kamailio and previents the stop of the interpreter.
+    # Relevant remarks:
+    # * return code -255 is used to propagate the 'exit' behaviour to the
+    # parent route block function. The alternative is to use the native
+    # Python function sys.exit() (or exit()) -- it throws an exception that
+    # is caught by Kamailio and previents the stop of the interpreter.
 
 
-    import re
     import KSR as KSR
 
-    FLT_ACC=1
-    FLT_ACCMISSED=2
-    FLT_ACCFAILED=3
-    FLT_NATS=5
-    FLB_NATB=6
-    FLB_NATSIPPING=7
+    FLT_ACC = 1
+    FLT_ACCMISSED = 2
+    FLT_ACCFAILED = 3
+    FLT_NATS = 5
+    FLB_NATB = 6
+    FLB_NATSIPPING = 7
+
+    config_data = {
+        'advertiseAddress': '{{.AdvertiseAddress}}:{{.UDPPort}}',
+        'kubernetesSourcePrefix': '10.43',        
+        'rules': [
+            {{range .Rules}}
+            {'domain': '{{.Domain}}', 'owner': '{{.Owner}}', 'service': '{{.Backend}}', 'headnumber': '{{.Headnumber}}'},
+            {{end}}
+        ]
+    }
 
     # global function to instantiate a kamailio class object
     # -- executed when kamailio app_python module is initialized
+
+
     def mod_init():
         KSR.info("===== from Python mod init\n")
         # dumpObj(KSR)
@@ -146,70 +145,102 @@ data:
         def __init__(self):
             KSR.info('===== kamailio.__init__\n')
 
-
         # executed when kamailio child processes are initialized
+
         def child_init(self, rank):
             # KSR.info('===== kamailio.child_init(%d)\n' % rank)
             return 0
 
-
         # SIP request routing
         # -- equivalent of request_route{}
         def ksr_request_route(self, msg):
-            # KSR.rr.record_route_advertised_address()
+            KSR.info("===== method [%s] r-uri [%s] ======\n" % (KSR.pv.get("$rm"), KSR.pv.get("$ru")))
 
-            # KSR.info("===== request - from kamailio python script\n")
-            KSR.info("===== method [%s] r-uri [%s]\n" % (KSR.pv.get("$rm"),KSR.pv.get("$ru")))
-
-            if self.ksr_route_reqinit(msg) == -255:
+            # do some initial request checks against malformed requests
+            if self.ksr_route_reqinit() == -255:
                 return -1
 
-            # logic to decide wether to use the domain or the main number (or other params) for the routing decision 
-            mainnumber = ""
-            if re.search(".*world-direct.at", KSR.pv.get("$rd")):
-                KSR.info("The request domain is used:"+ KSR.pv.get("$rd") + "\n")
-            else:
-                # cut the extension from the number
-                mainnumber = KSR.pv.get("$tU")[:-3]
-                KSR.info("The to user without extension is used:" + mainnumber + "\n")
+            if self.route_request() == -255:
+                return -1
+            
+            KSR.forward()
 
-
-            # based on template language for each customer later 
-            if "customera" in KSR.pv.get("$rd") or mainnumber == "<main number of customer a>":
-                KSR.forward_uri("sip:customera;transport=udp")
-                return 1
-            elif "customerb" in KSR.pv.get("$rd") or mainnumber == "<main number of customer b>":
-                KSR.forward_uri("sip:customerb;transport=udp")
-                return 1
-            else:
-                KSR.sl.send_reply(404, "No destination found.")
+            KSR.info("===== End handling request [" + KSR.pv.get("$rm") + "] ====== \n")
 
             return 1
 
+        def route_request(self):
+            KSR.rr.record_route_advertised_address(config_data["advertiseAddress"])
+
+            KSR.info("[ROUTE_REQUEST] Source ip address: "+ KSR.pv.get("$si") + "\n")
+            
+            # check if source ip from k8s net, so its an outbound call
+            if KSR.pv.get("$si").startswith(config_data['kubernetesSourcePrefix']):
+                return self.ksr_route_outbound()
+
+            # else the routing to the correct service has to be done
+            return self.ksr_route_inbound()
+
+
+        def ksr_route_outbound(self): 
+            # outbound call
+            if KSR.rr.loose_route() < 1:
+                KSR.info("[ROUTE_OUTBOUND] Failed loose routing for method: "+ KSR.pv.get("$rm") + " and source ip:" +KSR.pv.get("$si") + ".\n")
+                KSR.sl.send_reply(430,"Flow failed.")
+                return -255
+
+            # successful loose route, so return 1 to do the forward() in main
+            KSR.info("[ROUTE_OUTBOUND] Loose routing successful for outbound call.\n")
+
+            # sets the address in the via header for responses to find the location
+            KSR.set_advertised_address(config_data["advertiseAddress"])
+            return 1
         
-        def ksr_reply_route(self, msg):
-            return 1
-        
+        def ksr_route_inbound(self):
+            # do loose route, in either case search if theres a matching rule
+            if KSR.hdr.is_present("Route") > 0:
+                KSR.info("[ROUTE_INBOUND] Try loose routing for inbound call. \n")
+                if KSR.rr.loose_route() < 0:
+                    KSR.info("[ROUTE_REQUEST] Loose routing for inbound call failed. \n")
 
-        def ksr_on_reply_manage(self, msg):
-            return 1
 
-        def ksr_route_reqinit(self, msg):
+            domain = str(KSR.pv.get("$rd") or '')
+            mainnumber = str(KSR.pv.get("$rU") or '')
+            KSR.info("[ROUTE_INBOUND] Try to find correct service for request:<" + domain + "> or number:<" + mainnumber + ">.\n")
+
+            # search if the rDomain or user contain either correct domain or number 
+            for rule in config_data["rules"]:
+                if domain == rule["domain"] or mainnumber.startswith(rule["headnumber"]):
+                    KSR.info("[ROUTE_INBOUND] Routing request to " + rule["service"] + "\n")
+                    KSR.pv.sets("$rd", rule["service"])
+                    return 1
+
+            # is this correct or is a special handling needed for other request URIs
+            KSR.sl.send_reply(404, "Not found")
+            return -255
+
+        def ksr_route_reqinit(self):
             if KSR.corex.has_user_agent() > 0:
                 ua = KSR.pv.gete("$ua")
-                if (ua.find("friendly")!=-1 or ua.find("scanner")!=-1
-                        or ua.find("sipcli")!=-1 or ua.find("sipvicious")!=-1) :
+                if (ua.find("friendly") != -1 or ua.find("scanner") != -1
+                        or ua.find("sipcli") != -1 or ua.find("sipvicious") != -1):
                     KSR.sl.sl_send_reply(200, "Processed")
                     return -255
 
-            if KSR.maxfwd.process_maxfwd(10) < 0 :
-                KSR.sl.sl_send_reply(483,"Too Many Hops")
+            if KSR.maxfwd.process_maxfwd(10) < 0:
+                KSR.sl.sl_send_reply(483, "Too Many Hops")
                 return -255
 
-            if KSR.sanity.sanity_check(17895, 7)<0 :
+            if KSR.sanity.sanity_check(17895, 7) < 0:
                 KSR.err("Malformed SIP message from "
-                        + KSR.pv.get("$si") + ":" + str(KSR.pv.get("$sp")) +"\n")
+                        + KSR.pv.get("$si") + ":" + str(KSR.pv.get("$sp")) + "\n")
                 return -255
+
+        def ksr_reply_route(self, msg):
+            return 1
+
+        def ksr_on_reply_manage(self, msg):
+            return 1
 
         def ksr_onsend_route(self, msg):
             return 1
