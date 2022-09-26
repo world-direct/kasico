@@ -5,6 +5,7 @@ metadata:
 spec:
   ingressClassName: default
   templateConfigMapName: kamailio-templates
+  kamailioImage: kamailio/kamailio:5.4.9-jessie 
   routerService:
     # https://github.com/kubernetes/kubernetes/pull/94028
     tcpPort: 0

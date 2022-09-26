@@ -36,6 +36,10 @@ type RouterInstanceSpec struct {
 
 	// RouterService defines configuration values for the generated service
 	RouterService RouterServiceSpec `json:"routerService,omitempty"`
+
+	//+kubebuilder:validation:Required
+	// KamailioImage specifies the name of the image to use for the daemonset
+	KamailioImage string `json:"kamailioImage,omitempty"`
 }
 
 // RouterServiceSpec defines configuration values for the generated service

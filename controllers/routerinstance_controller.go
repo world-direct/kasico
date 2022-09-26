@@ -122,10 +122,29 @@ func (r *RouterInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	// Check if the ConfigMap with the routing-data already exists, if not create a new one
 	cmRoutingData := &corev1.ConfigMap{}
-	err = r.Get(ctx, types.NamespacedName{Name: Name_ConfigMap, Namespace: routerInstance.Namespace}, cmRoutingData)
+	err = r.Get(ctx, types.NamespacedName{Name: Name_ConfigMap_RoutingData, Namespace: routerInstance.Namespace}, cmRoutingData)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new ConfigMap
-		cm := r.configMapForRouterInstance(routerInstance)
+		cm := r.configMapRoutingDataForRouterInstance(routerInstance)
+		log.Info("Creating a new ConfigMap", "ConfigMap.Namespace", cm.Namespace, "ConfigMap.Name", cm.Name)
+		err = r.Create(ctx, cm)
+		if err != nil {
+			log.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", cm.Namespace, "ConfigMap.Name", cm.Name)
+			return ctrl.Result{}, err
+		}
+		// ConfigMap created successfully - return and requeue
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	// Check if the ConfigMap with the kamilio-config already exists, if not create a new one
+	cmKamailioConfig := &corev1.ConfigMap{}
+	err = r.Get(ctx, types.NamespacedName{Name: Name_ConfigMap_KamailioConfig, Namespace: routerInstance.Namespace}, cmKamailioConfig)
+	if err != nil && errors.IsNotFound(err) {
+		// Define a new ConfigMap
+		cm := r.configMapKamailioConfigForRouterInstance(routerInstance)
 		log.Info("Creating a new ConfigMap", "ConfigMap.Namespace", cm.Namespace, "ConfigMap.Name", cm.Name)
 		err = r.Create(ctx, cm)
 		if err != nil {
@@ -168,11 +187,25 @@ func (r *RouterInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// configMapForRouterInstance returns the router-rules secret for the instance
-func (r *RouterInstanceReconciler) configMapForRouterInstance(m *kasicov1.RouterInstance) *corev1.ConfigMap {
+// configMapKamailioConfigForRouterInstance returns the router-rules secret for the instance
+func (r *RouterInstanceReconciler) configMapKamailioConfigForRouterInstance(m *kasicov1.RouterInstance) *corev1.ConfigMap {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      Name_ConfigMap,
+			Name:      Name_ConfigMap_KamailioConfig,
+			Namespace: m.Namespace,
+		},
+	}
+
+	// Set RouterInstance as the owner and controller
+	ctrl.SetControllerReference(m, cm, r.Scheme)
+	return cm
+}
+
+// configMapRoutingDataForRouterInstance returns the router-rules secret for the instance
+func (r *RouterInstanceReconciler) configMapRoutingDataForRouterInstance(m *kasicov1.RouterInstance) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      Name_ConfigMap_RoutingData,
 			Namespace: m.Namespace,
 		},
 	}
@@ -205,9 +238,16 @@ func (r *RouterInstanceReconciler) daemonSetForRouterInstance(m *kasicov1.Router
 	}
 
 	kamailioContainer := corev1.Container{
-		Image: "nginx",
+		Image: m.Spec.KamailioImage,
 		Name:  Name_Container_Kamailio,
 		Ports: ports,
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      Name_ConfigMap_KamailioConfig,
+				MountPath: "/etc/kamailio",
+				ReadOnly:  true,
+			},
+		},
 	}
 
 	daemonSet := &appsv1.DaemonSet{
@@ -225,6 +265,18 @@ func (r *RouterInstanceReconciler) daemonSetForRouterInstance(m *kasicov1.Router
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{kamailioContainer},
+					Volumes: []corev1.Volume{
+						{
+							Name: Name_ConfigMap_KamailioConfig,
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: Name_ConfigMap_KamailioConfig,
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},

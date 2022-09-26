@@ -1,8 +1,10 @@
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"text/template"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -110,7 +112,7 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 		routerDataHash := HashStringMap(routerDataMap)
 
 		cmRoutingData := &corev1.ConfigMap{}
-		err = generator.Client.Get(ctx, types.NamespacedName{Name: Name_ConfigMap, Namespace: router.Namespace}, cmRoutingData)
+		err = generator.Client.Get(ctx, types.NamespacedName{Name: Name_ConfigMap_RoutingData, Namespace: router.Namespace}, cmRoutingData)
 		if err != nil {
 			return err
 		}
@@ -119,7 +121,7 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 
 		// check if the routerdata has been changed
 		if routerDataHash != existingHash {
-			log.Info("The hash of the data been changed, updating " + Name_ConfigMap)
+			log.Info("The hash of the data been changed, updating " + Name_ConfigMap_RoutingData)
 
 			cmRoutingData.Data = routerDataMap
 			SetAnnotation(&cmRoutingData.ObjectMeta, Name_AnnotationRoutingDataHash, routerDataHash)
@@ -130,7 +132,31 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 				return err
 			}
 
-			log.Info("Successfully updated the ConfigMap")
+			log.Info("Successfully updated the routing-data ConfigMap, running template generation")
+
+			cmTemplates := &corev1.ConfigMap{}
+			err = generator.Client.Get(ctx, types.NamespacedName{Name: router.Spec.TemplateConfigMapName, Namespace: router.Namespace}, cmTemplates)
+			if err != nil {
+				return err
+			}
+
+			cmKamailioConfig := &corev1.ConfigMap{}
+			err = generator.Client.Get(ctx, types.NamespacedName{Name: Name_ConfigMap_KamailioConfig, Namespace: router.Namespace}, cmKamailioConfig)
+			if err != nil {
+				return err
+			}
+
+			configs, err := GenerateTemplates(ctx, cmTemplates.Data, routingData)
+			if err != nil {
+				log.Error(err, "Error while rendering templates")
+			}
+
+			cmKamailioConfig.Data = configs
+			err = generator.Client.Update(ctx, cmKamailioConfig)
+			if err != nil {
+				log.Error(err, "Error while updating kamailio config")
+			}
+
 		} else {
 			log.Info("Nothing has changed")
 		}
@@ -138,4 +164,28 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 
 	return nil
 
+}
+
+func GenerateTemplates(ctx context.Context, templates map[string]string, data *RoutingData) (output map[string]string, err error) {
+
+	output = make(map[string]string)
+
+	for name, templateSrc := range templates {
+
+		t, err := template.New(name).Parse(templateSrc)
+		if err != nil {
+			return nil, err
+		}
+
+		var buf bytes.Buffer
+		err = t.Execute(&buf, data)
+		if err != nil {
+			return nil, err
+		}
+
+		res := buf.String()
+		output[name] = res
+	}
+
+	return output, nil
 }

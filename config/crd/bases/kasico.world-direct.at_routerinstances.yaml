@@ -39,6 +39,10 @@ spec:
                 description: IngressClassName is the name of the ingressClass managed
                   by this RouterInstance.
                 type: string
+              kamailioImage:
+                description: KamailioImage specifies the name of the image to use
+                  for the daemonset
+                type: string
               routerService:
                 description: RouterService defines configuration values for the generated
                   service
