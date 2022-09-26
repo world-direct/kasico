@@ -31,8 +31,9 @@ type RouterInstanceSpec struct {
 	// IngressClassName is the name of the ingressClass managed by this RouterInstance.
 	IngressClassName string `json:"ingressClassName,omitempty"`
 
-	// TemplateConfigMapName is the name of the configMap for the kamailio config files.
-	TemplateConfigMapName string `json:"templateConfigMapName,omitempty"`
+	// KamailioConfigTemplates contains the templates for the /etc/kamailio directory.
+	// Each entry is rendered as a distinct file
+	KamailioConfigTemplates map[string]string `json:"kamailioConfigTemplates,omitempty"`
 
 	// RouterService defines configuration values for the generated service
 	RouterService RouterServiceSpec `json:"routerService,omitempty"`

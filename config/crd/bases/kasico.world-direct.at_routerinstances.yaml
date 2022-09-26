@@ -39,6 +39,12 @@ spec:
                 description: IngressClassName is the name of the ingressClass managed
                   by this RouterInstance.
                 type: string
+              kamailioConfigTemplates:
+                additionalProperties:
+                  type: string
+                description: KamailioConfigTemplates contains the templates for the
+                  /etc/kamailio directory. Each entry is rendered as a distinct file
+                type: object
               kamailioImage:
                 description: KamailioImage specifies the name of the image to use
                   for the daemonset
@@ -62,10 +68,6 @@ spec:
                     default: 5060
                     type: integer
                 type: object
-              templateConfigMapName:
-                description: TemplateConfigMapName is the name of the configMap for
-                  the kamailio config files.
-                type: string
             type: object
           status:
             description: RouterInstanceStatus defines the observed state of RouterInstance

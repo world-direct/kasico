@@ -117,28 +117,37 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 			return err
 		}
 
-		existingHash := GetAnnotation(&cmRoutingData.ObjectMeta, Name_AnnotationRoutingDataHash)
+		needGeneration := false
 
 		// check if the routerdata has been changed
-		if routerDataHash != existingHash {
+		if routerDataHash != GetAnnotation(&cmRoutingData.ObjectMeta, Name_AnnotationRoutingDataHash) {
 			log.Info("The hash of the data been changed, updating " + Name_ConfigMap_RoutingData)
+			needGeneration = true
 
 			cmRoutingData.Data = routerDataMap
 			SetAnnotation(&cmRoutingData.ObjectMeta, Name_AnnotationRoutingDataHash, routerDataHash)
 			err = generator.Client.Update(ctx, cmRoutingData)
-
 			if err != nil {
 				log.Error(err, "Unable to update the routing-data configmap!")
 				return err
 			}
+		}
 
-			log.Info("Successfully updated the routing-data ConfigMap, running template generation")
+		if HashStringMap(router.Spec.KamailioConfigTemplates) != router.Status.TemplatesHash {
+			log.Info("The hash of the templates been changed, updating " + Name_ConfigMap_RoutingData)
+			needGeneration = true
 
-			cmTemplates := &corev1.ConfigMap{}
-			err = generator.Client.Get(ctx, types.NamespacedName{Name: router.Spec.TemplateConfigMapName, Namespace: router.Namespace}, cmTemplates)
+			router.Status.TemplatesHash = HashStringMap(router.Spec.KamailioConfigTemplates)
+			err = generator.Client.Update(ctx, &router)
 			if err != nil {
+				log.Error(err, "Unable to update the TemplatesHash of the router status!")
 				return err
 			}
+		}
+
+		if needGeneration {
+
+			log.Info("Successfully updated the routing-data ConfigMap, running template generation")
 
 			cmKamailioConfig := &corev1.ConfigMap{}
 			err = generator.Client.Get(ctx, types.NamespacedName{Name: Name_ConfigMap_KamailioConfig, Namespace: router.Namespace}, cmKamailioConfig)
@@ -146,7 +155,7 @@ func (generator *generator) reconcileImpl(ctx context.Context, log logr.Logger) 
 				return err
 			}
 
-			configs, err := GenerateTemplates(ctx, cmTemplates.Data, routingData)
+			configs, err := GenerateTemplates(ctx, router.Spec.KamailioConfigTemplates, routingData)
 			if err != nil {
 				log.Error(err, "Error while rendering templates")
 			}
